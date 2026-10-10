@@ -41,25 +41,25 @@ Let tge: genv := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_transf_partial TRANSL).
+Proof. exact (Genv.find_symbol_transf_partial TRANSL). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_transf_partial TRANSL).
+Proof. exact (Genv.senv_transf_partial TRANSL). Qed.
 
 Lemma function_ptr_translated:
   forall (b: block) (f: Csharpminor.fundef),
   Genv.find_funct_ptr ge b = Some f ->
   exists tf,
   Genv.find_funct_ptr tge b = Some tf /\ transl_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial TRANSL).
+Proof. exact (Genv.find_funct_ptr_transf_partial TRANSL). Qed.
 
 Lemma functions_translated:
   forall (v: val) (f: Csharpminor.fundef),
   Genv.find_funct ge v = Some f ->
   exists tf,
   Genv.find_funct tge v = Some tf /\ transl_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial TRANSL).
+Proof. exact (Genv.find_funct_transf_partial TRANSL). Qed.
 
 Lemma sig_preserved_body:
   forall f tf cenv size,
@@ -143,8 +143,8 @@ Lemma nextblock_storev:
   forall chunk m addr v m',
   Mem.storev chunk m addr v = Some m' -> Mem.nextblock m' = Mem.nextblock m.
 Proof.
-  unfold Mem.storev; intros. destruct addr; try discriminate.
-  eapply Mem.nextblock_store; eauto.
+  intros. destruct addr; try discriminate.
+  eapply Mem.nextblock_store; eauto with mem.
 Qed.
 
 (** * Correspondence between C#minor's and Cminor's environments and memory states *)
@@ -817,24 +817,23 @@ Lemma match_callstack_alloc_variables_rec:
 Proof.
   intros until cs; intros VALID REPRES STKSIZE STKPERMS.
   induction 1; intros f1 NOREPET COMPAT SEP1 SEP2 UNBOUND MCS MINJ.
-  (* base case *)
+- (* base case *)
   simpl in MCS. exists f1; auto.
-  (* inductive case *)
+- (* inductive case *)
   simpl in NOREPET. inv NOREPET.
-(* exploit Mem.alloc_result; eauto. intros RES.
-  exploit Mem.nextblock_alloc; eauto. intros NB.*)
   exploit (COMPAT id sz). auto with coqlib. intros [ofs [CENV [ALIGNED [LOB HIB]]]].
   exploit Mem.alloc_left_mapped_inject.
     eexact MINJ.
     eexact H.
     eexact VALID.
-    instantiate (1 := ofs). zify. lia.
+    instantiate (1 := ofs). lia.
+    right; lia.
     intros. exploit STKSIZE; eauto. lia.
-    intros. apply STKPERMS. zify. lia.
+    intros. apply STKPERMS. lia.
     replace (sz - 0) with sz by lia. auto.
     intros. eapply SEP2. eauto with coqlib. eexact CENV. eauto. eauto. lia.
-  intros [f2 [A [B [C D]]]].
-  exploit (IHalloc_variables f2); eauto.
+  intros (f2 & A & B & C & D).
+  eapply (IHalloc_variables f2); eauto.
     red; intros. eapply COMPAT. auto with coqlib.
     red; intros. eapply SEP1; eauto with coqlib.
     red; intros. exploit Mem.perm_alloc_inv; eauto. destruct (eq_block b b1); intros P.
@@ -885,21 +884,12 @@ Qed.
 
 (** Properties of the compilation environment produced by [build_compilenv] *)
 
-Remark block_alignment_pos:
-  forall sz, block_alignment sz > 0.
-Proof.
-  unfold block_alignment; intros.
-  destruct (zlt sz 2). lia.
-  destruct (zlt sz 4). lia.
-  destruct (zlt sz 8); lia.
-Qed.
-
 Remark assign_variable_incr:
   forall id sz cenv stksz cenv' stksz',
   assign_variable (cenv, stksz) (id, sz) = (cenv', stksz') -> stksz <= stksz'.
 Proof.
   simpl; intros. inv H.
-  generalize (align_le stksz (block_alignment sz) (block_alignment_pos sz)).
+  generalize (align_le stksz (min_safe_alignment sz) (min_safe_alignment_pos sz)).
   assert (0 <= Z.max 0 sz). apply Zmax_bound_l. lia.
   lia.
 Qed.
@@ -919,35 +909,20 @@ Qed.
 
 Remark inj_offset_aligned_block:
   forall stacksize sz,
-  Mem.inj_offset_aligned (align stacksize (block_alignment sz)) sz.
+  Mem.inj_offset_aligned (align stacksize (min_safe_alignment sz)) sz.
 Proof.
-  intros; red; intros.
-  apply Z.divide_trans with (block_alignment sz).
-  unfold align_chunk.  unfold block_alignment.
-  generalize Z.divide_1_l; intro.
-  generalize Z.divide_refl; intro.
-  assert (2 | 4). exists 2; auto.
-  assert (2 | 8). exists 4; auto.
-  assert (4 | 8). exists 2; auto.
-  destruct (zlt sz 2).
-  destruct chunk; simpl in *; auto; extlia.
-  destruct (zlt sz 4).
-  destruct chunk; simpl in *; auto; extlia.
-  destruct (zlt sz 8).
-  destruct chunk; simpl in *; auto; extlia.
-  destruct chunk; simpl; auto.
-  apply align_divides. apply block_alignment_pos.
+  intros; red. apply align_divides. apply min_safe_alignment_pos.
 Qed.
 
 Remark inj_offset_aligned_block':
   forall stacksize sz,
-  Mem.inj_offset_aligned (align stacksize (block_alignment sz)) (Z.max 0 sz).
+  Mem.inj_offset_aligned (align stacksize (min_safe_alignment sz)) (Z.max 0 sz).
 Proof.
   intros.
-  replace (block_alignment sz) with (block_alignment (Z.max 0 sz)).
+  replace (min_safe_alignment sz) with (min_safe_alignment (Z.max 0 sz)).
   apply inj_offset_aligned_block.
   rewrite Zmax_spec. destruct (zlt sz 0); auto.
-  transitivity 1. reflexivity. unfold block_alignment. rewrite zlt_true. auto. lia.
+  transitivity 1. reflexivity. unfold min_safe_alignment. rewrite zlt_true. auto. lia.
 Qed.
 
 Lemma assign_variable_sound:
@@ -962,21 +937,22 @@ Lemma assign_variable_sound:
 Proof.
   unfold assign_variable; intros until vars; intros ASV NOREPET POS COMPAT SEP.
   inv ASV.
-  assert (LE: sz1 <= align sz1 (block_alignment sz)). apply align_le. apply block_alignment_pos.
+  assert (LE: sz1 <= align sz1 (min_safe_alignment sz)).
+  { apply align_le. apply min_safe_alignment_pos. }
   assert (EITHER: forall id' sz',
              In (id', sz') (vars ++ (id, sz) :: nil) ->
              In (id', sz') vars /\ id' <> id \/ (id', sz') = (id, sz)).
-    intros. rewrite in_app in H. destruct H.
+  { intros. rewrite in_app in H. destruct H.
     left; split; auto. red; intros; subst id'. elim NOREPET.
     change id with (fst (id, sz')). apply in_map; auto.
-    simpl in H. destruct H. auto. contradiction.
+    simpl in H. destruct H. auto. contradiction. }
   split; red; intros.
   apply EITHER in H. destruct H as [[P Q] | P].
   exploit COMPAT; eauto. intros [ofs [A [B [C D]]]].
   exists ofs.
   split. rewrite PTree.gso; auto.
   split. auto. split. auto. zify; lia.
-  inv P. exists (align sz1 (block_alignment sz)).
+  inv P. exists (align sz1 (min_safe_alignment sz)).
   split. apply PTree.gss.
   split. apply inj_offset_aligned_block.
   split. lia.
@@ -1997,7 +1973,7 @@ Proof.
   left; econstructor; split.
   apply plus_one. econstructor; eauto.
   econstructor; eauto.
-  inv VINJ1; simpl in H1; try discriminate. unfold Mem.storev in STORE'.
+  inv VINJ1; try discriminate. apply Mem.storev_store in H1, STORE'.
   rewrite (Mem.nextblock_store _ _ _ _ _ _ H1).
   rewrite (Mem.nextblock_store _ _ _ _ _ _ STORE').
   eapply match_callstack_invariant with f0 m tm; eauto.

@@ -16,7 +16,10 @@
 From Coq Require Import OrderedType.
 Require Import Coqlib Maps Ordered.
 Require Import AST Values.
+Require Archi.
 Require Export Machregs.
+
+Create HintDb locs.
 
 (** * Representation of locations *)
 
@@ -84,11 +87,11 @@ Qed.
 Definition typealign (ty: typ) : Z :=
   match ty with
   | Tint => 1
-  | Tlong => 2
-  | Tfloat => 1
+  | Tlong => Archi.align_int64 / 4
+  | Tfloat => Archi.align_float64 / 4
   | Tsingle => 1
   | Tany32 => 1
-  | Tany64 => 1
+  | Tany64 => (Z.max Archi.align_int64 Archi.align_float64) / 4
   end.
 
 Lemma typealign_pos:
@@ -468,11 +471,11 @@ Module OrderedLoc <: OrderedType.
         (ofs1 < ofs2 \/ (ofs1 = ofs2 /\ OrderedTyp.lt ty1 ty2)))
     end.
   Lemma eq_refl : forall x : t, eq x x.
-  Proof (@eq_refl t).
+  Proof. exact (@eq_refl t). Qed.
   Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-  Proof (@eq_sym t).
+  Proof. exact (@eq_sym t). Qed.
   Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-  Proof (@eq_trans t).
+  Proof. exact (@eq_trans t). Qed.
   Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
   Proof.
     unfold lt; intros.

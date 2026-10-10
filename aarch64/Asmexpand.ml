@@ -18,6 +18,7 @@ open Asmexpandaux
 open AST
 open Camlcoq
 module Ptrofs = Integers.Ptrofs
+module I64 = Integers.Int64
 
 exception Error of string
 
@@ -38,9 +39,6 @@ let expand_loadimm32 (dst: ireg) n =
 
 let expand_addimm64 (dst: iregsp) (src: iregsp) n =
   List.iter emit (Asmgen.addimm64 dst src n [])
-
-let expand_storeptr (src: ireg) (base: iregsp) ofs =
-  List.iter emit (Asmgen.storeptr src base ofs [])
 
 (* Handling of varargs *)
 
@@ -407,11 +405,90 @@ let expand_builtin_inline name args res =
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
 
+(* Number of statements in a piece of inline assembly code.
+   This gives an upper bound on the number of machine instructions.
+   (Some statements can be labels or directives.) *)
+
+let re_asm_comment = Str.regexp "\\(//\\|^#\\).*$" (* // or # at BOL *)
+let re_blank_line = Str.regexp "^[ \t]*\n"
+let re_asm_stmt_separator = Str.regexp "[\n;]"    (* newline or ; *)
+
+let num_statements_inline_asm txt =
+  txt |> Str.global_replace re_asm_comment ""
+      |> Str.global_replace re_blank_line ""
+      |> Str.split re_asm_stmt_separator
+      |> List.length
+
+(* Branch relaxation *)
+
+module BInfo: BRANCH_INFORMATION = struct
+
+  let builtin_size = function
+    | EF_annot _ -> 0
+    | EF_debug _ -> 0
+    | EF_inline_asm(txt, _, _) -> 4 * num_statements_inline_asm txt
+    | _ -> assert false
+
+  let instr_size = function
+    | Pfmovimmd _ | Pfmovimms _ -> 8
+    | Ploadsymbol _ -> 2
+    | Pbtbl(_, tbl) -> 12 + 4 * List.length tbl
+    | Plabel _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
+    | Pbuiltin(ef, _, _) -> builtin_size ef
+    | _ -> 4
+
+  let branch_overflow ~map pc lbl range =
+    let displ = map lbl - pc in
+    displ < -range || displ >= range
+
+  let need_relaxation ~map pc instr =
+    match instr with
+    | Pbc(_, lbl) | Pcbnz(_, _, lbl) | Pcbz(_, _, lbl) ->
+        (* +/- 1 MB *)
+        branch_overflow ~map pc lbl 0x100_000
+    | Ptbnz(_, _, _, lbl) | Ptbz(_, _, _, lbl) ->
+        (* +/- 32 KB *)
+        branch_overflow ~map pc lbl 0x8_000
+    | _ ->
+        false
+
+  let negate_testcond = function
+    | TCeq -> TCne   | TCne -> TCeq
+    | TChs -> TClo   | TClo -> TChs
+    | TCmi -> TCpl   | TCpl -> TCmi
+    | TChi -> TCls   | TCls -> TChi
+    | TCge -> TClt   | TClt -> TCge
+    | TCgt -> TCle   | TCle -> TCgt
+
+  let relax_instruction instr =
+    match instr with
+    | Pbc(c, lbl) ->
+        let lbl' = new_label() in
+        [Pbc(negate_testcond c, lbl'); Pb lbl; Plabel lbl']
+    | Pcbnz(sz, r, lbl) ->
+        let lbl' = new_label() in
+        [Pcbz(sz, r, lbl'); Pb lbl; Plabel lbl']
+    | Pcbz(sz, r, lbl) ->
+        let lbl' = new_label() in
+        [Pcbnz(sz, r, lbl'); Pb lbl; Plabel lbl']
+    | Ptbnz(sz, r, n, lbl) ->
+        let lbl' = new_label() in
+        [Ptbz(sz, r, n, lbl'); Pb lbl; Plabel lbl']
+    | Ptbz(sz, r, n, lbl) ->
+        let lbl' = new_label() in
+        [Ptbnz(sz, r, n, lbl'); Pb lbl; Plabel lbl']
+    | _ ->
+        assert false
+
+end
+
+module BRelax = Branch_relaxation (BInfo)
+
 (* Expansion of instructions *)
 
 let expand_instruction instr =
   match instr with
-  | Pallocframe (sz, ofs) ->
+  | Pallocframe (sz, linkofs, retaddrofs) ->
       emit (Pmov (RR1 X15, XSP));
       if is_current_function_variadic() && Archi.abi = Archi.AAPCS64 then begin
         let (ir, fr, _) =
@@ -422,9 +499,21 @@ let expand_instruction instr =
       end else begin
         current_function_stacksize := Z.to_int64 sz
       end;
-      expand_addimm64 XSP XSP (Ptrofs.repr (Z.neg sz));
-      emit (Pcfi_adjust sz);
-      expand_storeptr X15 XSP ofs
+      assert (retaddrofs = Z.(add linkofs (of_uint 8)));
+      let sz1 = Z.(sub sz linkofs) in
+      if Z.(le sz1 (of_uint 512)) then begin
+        emit (Pstp(X15, X30, ADpreincr(XSP, I64.repr (Z.neg sz1))));
+        emit (Pcfi_adjust sz1)
+      end else begin
+        expand_addimm64 XSP XSP (Ptrofs.repr (Z.neg sz1));
+        emit (Pcfi_adjust sz1);
+        emit (Pstp(X15, X30, ADimm(XSP, I64.zero)))
+      end;
+      let sz2 = Z.(sub sz sz1) in
+      if Z.(gt sz2 zero) then begin
+        expand_addimm64 XSP XSP (Ptrofs.repr (Z.neg sz2));
+        emit (Pcfi_adjust sz2)
+      end
   | Pfreeframe (sz, ofs) ->
       expand_addimm64 XSP XSP (coqint_of_camlint64 !current_function_stacksize)
   | Pcvtx2w rd ->
@@ -478,7 +567,8 @@ let expand_function id fn =
   try
     set_current_function fn;
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
-    Errors.OK (get_current_function ())
+    let fn' = BRelax.relaxation (get_current_function ()) in
+    Errors.OK fn'
   with Error s ->
     Errors.Error (Errors.msg s)
 

@@ -1,6 +1,6 @@
 # C → Lean 4: Clight semantics and a separation logic, in Lean
 
-This document describes the Lean 4 backend added to CompCert 3.17. It covers
+This document describes the Lean 4 backend added to CompCert 3.18. It covers
 what exists, what it guarantees, and how to use it. The work has four parts:
 
 1. a `-lean` flag for `clightgen`, which exports a C program's Clight abstract

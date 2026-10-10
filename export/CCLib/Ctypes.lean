@@ -514,9 +514,9 @@ def alignofBlockcopy (env : CompositeEnv) : Ty → Z
   | .Tint .I16 _ _ => 2
   | .Tint .I32 _ _ => 4
   | .Tint .IBool _ _ => 1
-  | .Tlong _ _ => 8
+  | .Tlong _ _ => Archi.align_int64
   | .Tfloat .F32 _ => 4
-  | .Tfloat .F64 _ => 8
+  | .Tfloat .F64 _ => Archi.align_float64
   | .Tpointer _ _ => if Archi.ptr64 then 8 else 4
   | .Tarray t' _ _ => alignofBlockcopy env t'
   | .Tfunction _ _ _ => 1

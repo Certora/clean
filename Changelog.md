@@ -1,3 +1,45 @@
+# Release 3.18
+
+Code generation and optimization:
+- Branch relaxation implemented for AArch64 and revised for PowerPC.
+- AArch64: shorten function preludes by using pre-indexed store-pair instructions (#583)
+
+Bug fixes:
+- More prudent handling of static names for string literals (#579)
+- Enforce minimal safe alignment on global variables (#581)
+- x86 / Win64 ABI: fix inconsistency on callee-save XMM registers (#584)
+- Reject `aligned` attribute on bit fields in struct types.
+- Thread the current typing environment through `Elab.elab_initializer`.
+- Printing of assembly files: quote command-line arguments when needed (#586)
+- Printing of assembly files: revised string quoting in debugging information (#588)
+- x86 64 bits, `Pjmptbl` instruction: make sure the 32-bit argument is zero-extended to 64 bits before indexing in the jump table (#595)
+
+Usability:
+- AArch64 asm clobbers: recognize more register names (#576)
+
+Specifications and proofs:
+- Memory model: support target-dependent alignments for 64-bit chunks.
+  (Before, default alignments were used for all targets, causing an
+  incompatibility with the x86-32 ABI.)
+- `Mem.loadv`, `Mem.storev`: explicit check that all addressed bytes
+  are at offsets <= `Ptrofs.max_unsigned`
+  (Previously, this was implicitly ensured by the alignment check, but
+  the revised alignment handling makes an explicit check necessary.)
+- Stricter formal semantics for `free`, enforcing the requirement that
+  the argument is a pointer obtained via `malloc` (#592)
+- Implement `Iteration.WfIter` without axioms, and make explicit
+  the dependency of `Iteration.GenIter` on classical axioms.
+- Provide counted "for" loops in `Iteration.CountedLoop` and use them
+  in ValueDomain.
+
+Rocq/Coq development:
+- Support Rocq 9.2.
+- If Rocq is installed, call the `rocq` command directly instead of
+  going through the `coq*` compatibility wrappers (#587)
+- Cleaned-up the Rocq code to address Rocq 9.2 warnings (#587)
+- Update to Flocq 4.2.2.
+- OCaml 5 is now officially supported.
+
 # Release 3.17, 2026-02-13
 
 Bug fixes:

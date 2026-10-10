@@ -8,7 +8,7 @@
   below, never by `simp [Archi.ptr64]` in generic lemmas.
 
   Only these knobs parameterize the whole semantics (measured over CompCert
-  3.17): `ptr64`, `big_endian`, `align_int64`, `align_float64`, `splitlong`,
+  3.18): `ptr64`, `big_endian`, `align_int64`, `align_float64`, `splitlong`,
   plus float NaN-choice knobs (handled in `CCLib.Floats`).
 -/
 namespace CC

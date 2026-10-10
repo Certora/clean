@@ -101,7 +101,7 @@ Lemma Eapp_assoc: forall t1 t2 t3, (t1 ** t2) ** t3 = t1 ** (t2 ** t3).
 Proof. intros. unfold Eapp, trace. apply app_ass. Qed.
 
 Lemma Eapp_E0_inv: forall t1 t2, t1 ** t2 = E0 -> t1 = E0 /\ t2 = E0.
-Proof (@app_eq_nil event).
+Proof. exact (@app_eq_nil event). Qed.
 
 Lemma E0_left_inf: forall T, E0 *** T = T.
 Proof. auto. Qed.
@@ -565,7 +565,7 @@ Inductive volatile_load (ge: Senv.t):
                       (Val.load_result chunk v)
   | volatile_load_nonvol: forall chunk m b ofs v,
       Senv.block_is_volatile ge b = false ->
-      Mem.load chunk m b (Ptrofs.unsigned ofs) = Some v ->
+      Mem.loadv chunk m (Vptr b ofs) = Some v ->
       volatile_load ge chunk m b ofs E0 v.
 
 Inductive volatile_store (ge: Senv.t):
@@ -579,7 +579,7 @@ Inductive volatile_store (ge: Senv.t):
                       m
   | volatile_store_nonvol: forall chunk m b ofs v m',
       Senv.block_is_volatile ge b = false ->
-      Mem.store chunk m b (Ptrofs.unsigned ofs) v = Some m' ->
+      Mem.storev chunk m (Vptr b ofs) v = Some m' ->
       volatile_store ge chunk m b ofs v E0 m'.
 
 (** * Semantics of external functions *)
@@ -733,7 +733,7 @@ Lemma volatile_load_extends:
 Proof.
   intros. inv H.
   econstructor; split; eauto. econstructor; eauto.
-  exploit Mem.load_extends; eauto. intros [v' [A B]]. exists v'; split; auto. constructor; auto.
+  exploit Mem.loadv_extends; eauto. intros [v' [A B]]. exists v'; split; auto. constructor; auto.
 Qed.
 
 Lemma volatile_load_inject:
@@ -754,7 +754,7 @@ Proof.
   erewrite D; eauto.
   apply Val.load_result_inject. auto.
 - (* normal load *)
-  exploit Mem.loadv_inject; eauto. simpl; eauto. simpl; intros (v2 & X & Y).
+  exploit Mem.loadv_inject; eauto. intros (v2 & X & Y).
   exists v2; split; auto.
   constructor; auto.
   inv VI. erewrite D; eauto.
@@ -779,7 +779,7 @@ Proof.
   intros; constructor; intros.
 (* well typed *)
 - inv H. inv H0. apply Val.load_result_xtype.
-  eapply Mem.load_xtype; eauto.
+  eapply Mem.load_xtype; eauto with mem.
 (* symbols *)
 - inv H0. constructor. eapply volatile_load_preserved; eauto.
 (* valid blocks *)
@@ -856,8 +856,8 @@ Lemma volatile_store_readonly:
 Proof.
   intros. inv H.
 - apply Mem.unchanged_on_refl.
-- eapply Mem.store_unchanged_on; eauto.
-  exploit Mem.store_valid_access_3; eauto. intros [P Q].
+- eapply Mem.storev_unchanged_on; eauto.
+  exploit Mem.store_valid_access_3; eauto with mem. intros [P Q].
   intros. unfold loc_not_writable. red; intros. elim H2.
   apply Mem.perm_cur_max. apply P. auto.
 Qed.
@@ -876,14 +876,14 @@ Proof.
 - econstructor; split. econstructor; eauto.
   eapply eventval_match_lessdef; eauto. apply Val.load_result_lessdef; auto.
   auto with mem.
-- exploit Mem.store_within_extends; eauto. intros [m2' [A B]].
+- exploit Mem.storev_extends; eauto. intros [m2' [A B]].
   exists m2'; intuition auto with mem.
 + econstructor; eauto.
-+ eapply Mem.store_unchanged_on; eauto.
++ eapply Mem.storev_unchanged_on; eauto.
   unfold loc_out_of_bounds; intros.
   assert (Mem.perm m1 b i Max Nonempty).
   { apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
-    exploit Mem.store_valid_access_3. eexact H3. intros [P Q]. eauto. }
+    exploit Mem.store_valid_access_3. eapply Mem.storev_store. eexact H3. intros [P Q]. eauto. }
   tauto.
 Qed.
 
@@ -911,19 +911,18 @@ Proof.
   intuition auto with mem.
 - (* normal store *)
   inversion AI; subst.
-  assert (Mem.storev chunk m1 (Vptr b ofs) v = Some m2). simpl; auto.
   exploit Mem.storev_mapped_inject; eauto. intros [m2' [A B]].
   exists m2'; intuition auto.
 + constructor; auto. erewrite S; eauto.
-+ eapply Mem.store_unchanged_on; eauto.
++ eapply Mem.storev_unchanged_on; eauto.
   unfold loc_unmapped; intros. inv AI; congruence.
-+ eapply Mem.store_unchanged_on; eauto.
-  unfold loc_out_of_reach; intros. red; intros. simpl in A.
-  assert (EQ: Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta)) = Ptrofs.unsigned ofs + delta)
-  by (eapply Mem.address_inject; eauto with mem).
++ eapply Mem.storev_unchanged_on; eauto.
+  unfold loc_out_of_reach; intros. red; intros.
+  assert (EQ: Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta)) = Ptrofs.unsigned ofs + delta).
+  { eapply Mem.address_inject' with (m1 := m1); eauto with mem. }
   rewrite EQ in *.
-  eelim H3; eauto.
-  exploit Mem.store_valid_access_3. eexact H0. intros [X Y].
+  eelim H2; eauto.
+  exploit Mem.store_valid_access_3. eapply Mem.storev_store. eexact H0. intros [X Y].
   apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
   apply X. lia.
 Qed.
@@ -1061,10 +1060,10 @@ Qed.
 
 Inductive extcall_free_sem (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_free_sem_ptr: forall b lo sz m m',
-      Mem.load Mptr m b (Ptrofs.unsigned lo - size_chunk Mptr) = Some (Vptrofs sz) ->
-      Mem.free m b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) = Some m' ->
-      extcall_free_sem ge (Vptr b lo :: nil) m E0 Vundef m'
+  | extcall_free_sem_ptr: forall b sz m m',
+      Mem.load Mptr m b (- size_chunk Mptr) = Some (Vptrofs sz) ->
+      Mem.free m b (- size_chunk Mptr) (Ptrofs.unsigned sz) = Some m' ->
+      extcall_free_sem ge (Vptr b Ptrofs.zero :: nil) m E0 Vundef m'
   | extcall_free_sem_null: forall m,
       extcall_free_sem ge (Vnullptr :: nil) m E0 Vundef m.
 
@@ -1116,25 +1115,22 @@ Proof.
   assert (v' = Vptrofs sz).
   { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. }
   subst v'.
-  assert (P: Mem.range_perm m1 b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) Cur Freeable).
-    eapply Mem.free_range_perm; eauto.
-  assert (EQ: Ptrofs.unsigned (Ptrofs.add lo (Ptrofs.repr delta)) = Ptrofs.unsigned lo + delta).
-  { eapply Mem.address_inject_gen with (p := Freeable); eauto.
-    right. apply P.
-    generalize (size_chunk_pos Mptr), (Ptrofs.unsigned_range sz); lia. }
+  assert (delta = 0).
+  { eapply Mem.mi_metadata; eauto.
+    instantiate (1 := - size_chunk Mptr). eauto with mem.
+    generalize (size_chunk_pos Mptr). lia. }
+  subst delta.
   exploit Mem.free_parallel_inject; eauto. intros (m2' & C & D).
+  rewrite ! Z.add_0_r in *.
   exists f, Vundef, m2'; split.
-  apply extcall_free_sem_ptr with (sz := sz) (m' := m2').
-    rewrite EQ. rewrite <- A. f_equal. lia.
-    auto. auto.
-    rewrite ! EQ. rewrite <- C. f_equal; lia.
+  apply extcall_free_sem_ptr with (sz := sz) (m' := m2'); auto.
   split. auto.
   split. auto.
   split. eapply Mem.free_unchanged_on; eauto. unfold loc_unmapped. intros; congruence.
   split. eapply Mem.free_unchanged_on; eauto. unfold loc_out_of_reach.
     intros. red; intros. eelim H2; eauto.
     apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
-    apply P. lia.
+    eapply Mem.free_range_perm; eauto. lia.
   split. auto.
   red; intros. congruence.
 + inv H2. inv H6. replace v' with Vnullptr.
@@ -1706,6 +1702,7 @@ Qed.
 
 End EVAL_BUILTIN_ARG.
 
+Create HintDb barg.
 Global Hint Constructors eval_builtin_arg: barg.
 
 Fixpoint builtin_arg_depends_on_memory {A: Type} (ba: builtin_arg A) : bool :=

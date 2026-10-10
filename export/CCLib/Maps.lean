@@ -6,7 +6,7 @@
   Used by: `Mem.mem` (`PMap.t (ZMap.t memval)` and `PMap.t (Z → perm_kind →
   option permission)`), `Clight.env`/`temp_env`, `Ctypes.composite_env`, `Genv`.
 
-  ## Representation difference from CompCert 3.17
+  ## Representation difference from CompCert 3.18
 
   CompCert ≥3.11 uses a *canonical* 7-constructor `tree'` representation
   precisely so that `PTree.extensionality` holds structurally (equal contents ⇒
