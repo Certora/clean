@@ -8,7 +8,7 @@
 #             corpus is written to be free of undefined and
 #             implementation-defined behaviour — a native compiler will happily
 #             run programs whose behaviour CompCert leaves undefined.
-#   subject : clightgen -lean, then the Lean interpreter (CCLib.ClightExec)
+#   subject : clightgen -lean, then the Lean interpreter (CCLib.cfrontend.ClightExec)
 #
 # IMPORTANT about what this does and does not check.  `ccomp -interp` executes
 # **CompCert C** (`Csem`), not Clight — CompCert has no executable Clight
@@ -67,7 +67,7 @@ for c in "$corpus"/*.c; do
   "$root/clightgen" -lean -normalize $CCFLAGS -o "$tmp/DiffProg.lean" "$c"
   cp "$tmp/DiffProg.lean" "$work/DiffProg.lean"
   # Generated modules live in a per-source namespace (so that several of them can
-  # be imported together — see CCLib/Linking.lean).  Read it out of the file
+  # be imported together — see CCLib/common/Linking.lean).  Read it out of the file
   # rather than recomputing the exporter's naming rule here.
   ns=$(sed -n 's/^namespace \(.*\)$/\1/p' "$work/DiffProg.lean" | head -1)
   sed "s/^open CC$/open CC\nopen $ns/" "$exp/DiffRun.lean" > "$work/DiffRun.lean"

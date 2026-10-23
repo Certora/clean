@@ -48,23 +48,23 @@ Qed.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_match (proj1 TRANSF)).
+Proof. exact (Genv.find_symbol_match (proj1 TRANSF)). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_match (proj1 TRANSF)).
+Proof. exact (Genv.senv_match (proj1 TRANSF)). Qed.
 
 Lemma functions_translated:
   forall (v: val) (f: fundef),
   Genv.find_funct ge v = Some f ->
   exists tf, Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial (proj1 TRANSF)).
+Proof. exact (Genv.find_funct_transf_partial (proj1 TRANSF)). Qed.
 
 Lemma function_ptr_translated:
   forall (b: block) (f: fundef),
   Genv.find_funct_ptr ge b = Some f ->
   exists tf, Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial (proj1 TRANSF)).
+Proof. exact (Genv.find_funct_ptr_transf_partial (proj1 TRANSF)). Qed.
 
 Lemma type_of_fundef_preserved:
   forall fd tfd,
@@ -397,7 +397,7 @@ Lemma match_envs_assign_lifted:
 Proof.
   intros. destruct H. generalize (me_vars0 id); intros MV; inv MV; try congruence.
   rewrite ENV in H0; inv H0. inv H3; try congruence.
-  unfold Mem.storev in H0. rewrite Ptrofs.unsigned_zero in H0.
+  apply Mem.storev_store in H0. rewrite Ptrofs.unsigned_zero in H0.
   constructor; eauto; intros.
 (* vars *)
   destruct (peq id0 id). subst id0.
@@ -580,6 +580,7 @@ Proof.
   intros; red; intros. eapply VSet.empty_1; eauto.
 Qed.
 
+Create HintDb compat.
 Hint Resolve compat_cenv_union_l compat_cenv_union_r compat_cenv_empty: compat.
 
 (** Allocation and initialization of parameters *)
@@ -1019,7 +1020,7 @@ Proof.
   exploit Mem.storev_mapped_inject; eauto. intros [tm' [A B]].
   exists tm'; split. eapply assign_loc_value; eauto.
   split. auto.
-  intros. rewrite <- H5. eapply Mem.load_store_other; eauto.
+  intros. rewrite <- H5. eapply Mem.load_store_other; eauto with mem.
   left. inv H0. congruence.
 - (* by copy *)
   inv H0. inv H1.
@@ -1084,7 +1085,7 @@ Proof.
   inv H1.
   exists tm'; split. eapply assign_loc_bitfield; eauto. econstructor; eauto.
   split. auto.
-  intros. rewrite <- H3. eapply Mem.load_store_other; eauto.
+  intros. rewrite <- H3. eapply Mem.load_store_other; eauto with mem.
   left. inv H0. congruence.
 Qed.
 
@@ -1093,9 +1094,9 @@ Lemma assign_loc_nextblock:
   assign_loc ge ty m b ofs bf v m' -> Mem.nextblock m' = Mem.nextblock m.
 Proof.
   induction 1.
-  simpl in H0. eapply Mem.nextblock_store; eauto.
+  eapply Mem.nextblock_store; eauto with mem.
   eapply Mem.nextblock_storebytes; eauto.
-  inv H. eapply Mem.nextblock_store; eauto.
+  inv H. eapply Mem.nextblock_store; eauto with mem.
 Qed.
 
 Theorem store_params_correct:
@@ -1132,7 +1133,7 @@ Local Opaque Conventions1.parameter_needs_normalization.
     eapply match_envs_assign_lifted; eauto.
     inv MV; try congruence. rewrite ENV in H; inv H.
     inv H0; try congruence.
-    unfold Mem.storev in H2. eapply Mem.store_unmapped_inject; eauto.
+    eapply Mem.store_unmapped_inject; eauto with mem.
     intros. repeat rewrite PTree.gsspec. destruct (peq id0 id). auto.
     apply TLE. intuition.
     eauto.
@@ -1201,7 +1202,7 @@ Proof.
   rewrite IHbind_parameters.
   assert (b <> b0) by eauto.
   inv H1.
-  simpl in H5. eapply Mem.load_store_other; eauto.
+  simpl in H5. eapply Mem.load_store_other; eauto with mem.
   eapply Mem.load_storebytes_other; eauto.
 Qed.
 
@@ -1487,7 +1488,7 @@ Proof.
   rewrite ENV in H7; inv H7.
   inv H0; try congruence.
   assert (chunk0 = chunk). simpl in H. congruence. subst chunk0.
-  assert (v0 = v). unfold Mem.loadv in H2. rewrite Ptrofs.unsigned_zero in H2. congruence. subst v0.
+  assert (v0 = v). apply Mem.loadv_load in H2. rewrite Ptrofs.unsigned_zero in H2. congruence. subst v0.
   exists tv; split; auto. constructor; auto.
   simpl in H; congruence.
   simpl in H; congruence.
@@ -1629,11 +1630,11 @@ Proof.
   intros. eapply match_cont_invariant; eauto.
   intros. rewrite <- H4. inv H0.
 - (* scalar *)
-  simpl in H6. eapply Mem.load_store_other; eauto. left. unfold block; extlia.
+  eapply Mem.load_store_other; eauto with mem. left. unfold block; extlia.
 - (* block copy *)
   eapply Mem.load_storebytes_other; eauto. left. unfold block; extlia.
 - (* bitfield *)
-  inv H5. eapply Mem.load_store_other; eauto. left. unfold block; extlia.
+  inv H5. eapply Mem.load_store_other; eauto with mem. left. unfold block; extlia.
 Qed.
 
 (** Invariance by external calls *)
@@ -2049,7 +2050,7 @@ Proof.
   eapply match_envs_assign_lifted; eauto. eapply cast_val_is_casted; eauto.
   eapply match_cont_assign_loc; eauto. exploit me_range; eauto. extlia.
   inv MV; try congruence. inv H2; try congruence. unfold Mem.storev in H3.
-  eapply Mem.store_unmapped_inject; eauto. congruence.
+  eapply Mem.store_unmapped_inject; eauto with mem. congruence.
   erewrite assign_loc_nextblock; eauto.
   (* global variable *)
   inv MV; congruence.

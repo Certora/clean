@@ -1,0 +1,91 @@
+/-
+  [RISC-V instance of `CCLib/backend/InliningproofMain.lean`: the same development, in
+  namespace `CC.RiscV`, over the RISC-V operators, registers and conventions.]
+
+  RTL function inlining: semantic preservation — port of
+  `backend/Inliningproof.v`, part 5: initial and final states and the main
+  theorem `transf_program_correct`.
+-/
+import CCLib.riscV.InliningproofStep
+
+namespace CC
+namespace RiscV
+namespace Inlining
+
+open Op RTL Smallstep
+open Integers (Ptrofs)
+
+section INITFINAL
+variable {prog tprog : RTL.Program} {fenv0 : Funenv}
+  (TRANSF : transformPartialProgram (transfFundef fenv0) prog = .OK tprog)
+include TRANSF
+
+/-- `Inliningproof.transf_initial_states` -/
+theorem transf_initial_states {st1 : RTL.State} (h : RTL.InitialState prog st1) :
+    ∃ st2, RTL.InitialState tprog st2 ∧ MatchStates prog fenv0 st1 st2 := by
+  cases h with
+  | intro b f m0 hm hs hf hsig =>
+    obtain ⟨tf, A, B⟩ := find_funct_ptr_transf_partial TRANSF hf
+    have MG : MatchGlobalenvs prog.globalenv (Mem.flatInj m0.nextblock) m0.nextblock :=
+      { domain := fun b h => by simp [Mem.flatInj, h]
+        image := fun b1 b2 delta hf' _ => (Mem.flatInj_some hf').1.symm
+        symbols := fun id b hs' => lt_of_validBlock (Genv.findSymbol_not_fresh hm hs')
+        functions := fun b fd hf' => lt_of_validBlock (Genv.findFunctPtr_not_fresh hm hf')
+        varinfos := fun b gv hv => lt_of_validBlock (Genv.findVarInfo_not_fresh hm hv) }
+    refine ⟨_, .intro b tf m0 ?_ ?_ A ?_,
+      .call _ _ _ _ _ _ _ _ _ (.nil _ _ MG (Nat.le_refl _)) B .nil (Genv.initmem_inject hm)⟩
+    · exact (init_mem_transf_partial TRANSF).trans hm
+    · rw [(match_transform_partial_program TRANSF).main_eq, symbols_preserved TRANSF]
+      exact hs
+    · rw [sig_function_translated B]; exact hsig
+
+end INITFINAL
+
+/-- `Inliningproof.transf_final_states` -/
+theorem transf_final_states {prog : RTL.Program} {fenv0 : Funenv} {st1 st2 : RTL.State}
+    {r : Integers.Int} (hm : MatchStates prog fenv0 st1 st2) (h : RTL.FinalState st1 r) :
+    RTL.FinalState st2 r := by
+  cases h with
+  | intro r m =>
+    cases hm with
+    | ret _ _ _ _ _ _ _ MS VINJ _ =>
+      cases match_stacks_empty MS rfl
+      cases VINJ
+      exact .intro _ _
+    | return_regular _ _ _ _ _ _ _ _ _ _ _ _ _ MS RET _ _ _ _ _ _ _ _ =>
+      rw [(match_stacks_inside_empty MS rfl).2] at RET
+      cases RET
+
+/-- `Inliningproof.transf_program_correct`: function inlining preserves the
+    semantics of RTL programs (forward simulation), for any inlining heuristic
+    (`inliningAnalysis`, `shouldInline`).
+
+    The hypotheses describe the external functions and inline assembly, whose
+    semantics the port leaves uninterpreted: compatibility with memory
+    injections (`hext`, `hasm`, i.e. `ec_mem_inject`) and the memory properties
+    `ec_valid_block`, `ec_max_perm`, `ec_readonly`, `ec_trace_length`
+    (`hextp`, `hasmp`).  CompCert assumes both by axiom
+    (`external_functions_properties`, `inline_assembly_properties`). -/
+theorem transf_program_correct {Info : Type} (inliningAnalysis : RTL.Program → Info)
+    (shouldInline : Info → Ident → RTL.Function → Bool) (prog tprog : RTL.Program)
+    (TRANSF : transfProgram inliningAnalysis shouldInline prog = .OK tprog)
+    (hext : ∀ name sg, ExtcallMemInject (externalFunctionsSem name sg))
+    (hasm : ∀ name sg, ExtcallMemInject (inlineAssemblySem name sg))
+    (hextp : ∀ name sg ge, ExtcallMemProps (externalFunctionsSem name sg) ge)
+    (hasmp : ∀ name sg ge, ExtcallMemProps (inlineAssemblySem name sg) ge) :
+    ForwardSimulation (RTL.semantics prog) (RTL.semantics tprog) :=
+  have COMPAT0 := funenv_program_compat inliningAnalysis shouldInline prog
+  forward_simulation_star (L1 := RTL.semantics prog) (L2 := RTL.semantics tprog)
+    (MatchStates prog (funenvProgram inliningAnalysis shouldInline prog))
+    (fun id => by
+      show (Genv.toSenv tprog.globalenv).public_symbol id =
+        (Genv.toSenv prog.globalenv).public_symbol id
+      rw [senv_preserved TRANSF])
+    (fun _ h => transf_initial_states TRANSF h)
+    (fun _ _ _ hm h => transf_final_states hm h)
+    measure
+    (fun _ _ _ hst _ hm => step_simulation TRANSF COMPAT0 hext hasm hextp hasmp hst hm)
+
+end Inlining
+end RiscV
+end CC

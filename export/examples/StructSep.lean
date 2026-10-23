@@ -20,7 +20,7 @@ namespace StructSep
 environment: `fieldOffsetRec` compares field identifiers, so they need
 `DecidableEq` on `Res`/`Member`/`Composite` (added for exactly this) *and* a
 reducible `identOfString`.  They needed `native_decide` until `identOfString`
-was rewritten to fold over `String.toList` (see `CCLib.Positive`); kernel
+was rewritten to fold over `String.toList` (see `CCLib.lib.Positive`); kernel
 `decide` now discharges them. -/
 
 /-- `field_offset` for the two fields, computed from the generated composite. -/

@@ -1,7 +1,7 @@
 /-
   **Phase-9 Step 7 — calls through function pointers.**
 
-  Exercises `CCLib.FunPtr` on `test/lean/funcptr.c`, in the two shapes that
+  Exercises `CCLib.logic.FunPtr` on `test/lean/funcptr.c`, in the two shapes that
   matter for zlib:
 
   * `apply(g, x)` calls a function pointer passed as an argument.  Its proof is

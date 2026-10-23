@@ -334,22 +334,23 @@ theorem write_field (ge : CGenv) (fe : EntryRel) (phere : Permission)
     (hd0 : 0 ≤ delta) (hdlt : delta < 18446744073709551616)
     (hpw : permOrder phere .Writable = true)
     (hacc : accessMode ty = .By_value chunk)
-    (hcast : ∀ m : Mem, Cop.semCast (.Vint n) tint ty m = some v) :
+    (hcast : ∀ m : Mem, Cop.semCast (.Vint n) tint ty m = some v)
+    (hw : Mem.ChunkNoWrap chunk delta := by exact Or.inl rfl) :
     Triple ge fe f_put
       (St bHere bdst odst (mapsto chunk phere bHere delta .Vundef ∗ Rest))
       (.Sassign (.Efield (.Evar _here (Ty.Tstruct _code noattr)) fld ty)
         (.Econst_int n tint))
       (.only (St bHere bdst odst (mapsto chunk phere bHere delta v ∗ Rest))) := by
-  refine triple_assign ge fe f_put _ _ _ _ chunk phere bHere
-    (Integers.Ptrofs.add Integers.Ptrofs.zero (Integers.Ptrofs.repr delta))
-    hpw (by simpa only [typeof] using hacc) ?_
-  intro e le hp m hP _
-  obtain ⟨hbind, hdst, h1, h2, hd12, heq, hm1, hrest⟩ := hP
   -- the field's address: `0 + delta` is `delta`
   have haddr : Integers.Ptrofs.unsigned
       (Integers.Ptrofs.add Integers.Ptrofs.zero (Integers.Ptrofs.repr delta))
         = delta := by
     rw [ptrofs_zero_add, ptrofs_repr_unsigned delta hd0 hdlt]
+  refine triple_assign ge fe f_put _ _ _ _ chunk phere bHere
+    (Integers.Ptrofs.add Integers.Ptrofs.zero (Integers.Ptrofs.repr delta))
+    hpw (by simpa only [typeof] using hacc) ?_ (by rw [haddr]; exact hw)
+  intro e le hp m hP _
+  obtain ⟨hbind, hdst, h1, h2, hd12, heq, hm1, hrest⟩ := hP
   refine ⟨.Vundef, v, h1, h2, hd12, heq, by rw [haddr]; exact hm1, ?_, ?_, ?_⟩
   · exact eval_field_here hcenv hbind hoff
   · exact ⟨.Vint n, EvalExpr.Econst_int _ _, by simpa only [typeof] using hcast m⟩

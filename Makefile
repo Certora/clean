@@ -51,33 +51,60 @@ endif
 # unused-pattern-matching-variable:
 #    warning introduced in 8.13
 #    the code rewrite that avoids the warning is not desirable
-# undeclared-scope:
-#    warning introduced in 8.12, addressed in the main CompCert files
-#    triggered by MenhirLib, to be solved upstream
-# deprecated-instance-without-locality:
-#    warning introduced in 8.14
-#    triggered by Menhir-generated files, to be solved upstream in Menhir
 # deprecated-since-8.19
 # deprecated-since-8.20
+# deprecated-reference-since-9.0
+# deprecated-reference-since-Stdlib-9.0
+# deprecated-reference-since-9.1
+# deprecated-reference-since-Stdlib-9.1
 #    renamings performed in Coq's standard library;
 #    using the new names would break compatibility with earlier Coq versions.
 # deprecated-from-Coq
 #    Rocq wants "From Stdlib Require" while Coq wants "From Coq Require".
-
+# register-all
+#    Rocq 9.2 warns on inductive datatypes that recurse through list or prod
+# notation-for-abbreviation
+#    The warning and the `Abbreviation` keyword needed to fix it
+#    were both introduced in Rocq 9.2.
+# implicit-create-rewrite-hint-db
+#    The warning and the `Create Rewrite Hintdb` command needed to fix it
+#    were both introduced in Rocq 9.2.
+# deprecated-end-tac
+#    Warning introduced in Rocq 9.2, removed in Rocq 9.3
 COQCOPTS ?= \
   -w -unused-pattern-matching-variable \
   -w -deprecated-since-8.19 \
   -w -deprecated-since-8.20 \
-  -w -deprecated-from-Coq
+  -w -deprecated-reference-since-9.0 \
+  -w -deprecated-reference-since-Stdlib-9.0 \
+  -w -deprecated-reference-since-9.1 \
+  -w -deprecated-reference-since-Stdlib-9.1 \
+  -w -deprecated-from-Coq \
+  -w -register-all \
+  -w -notation-for-abbreviation \
+  -w -implicit-create-rewrite-hint-db \
+  -w -deprecated-end-tac
 
-cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality
-MenhirLib/Interpreter.vo: COQCOPTS += -w -undeclared-scope
+# deprecated-instance-without-locality:
+#    warning introduced in 8.14, removed in 8.18
+#    triggered by Menhir-generated files, to be solved upstream in Menhir
+# deprecated-exact-proof:
+#    warning introduced in 9.2
+#    triggered by Menhir-generated files, to be solved upstream in Menhir
+
+cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality -w -deprecated-exact-proof
 
 # Flocq and Menhirlib run into other renaming issues.
 # These warnings can only be addressed upstream.
 
-flocq/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition -w -deprecated-since-9.0
-MenhirLib/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition -w -deprecated-since-9.0
+flocq/%.vo MenhirLib/%.vo: COQCOPTS+=\
+  -w -deprecated-syntactic-definition \
+  -w -deprecated-since-9.0 \
+  -w -deprecated-since-Stdlib-9.0 \
+  -w -deprecated-since-9.1 \
+  -w -deprecated-since-Stdlib-9.1 \
+  -w -deprecated-since-9.2 \
+  -w -deprecated-since-Stdlib-9.2
 
 # For the extraction phase, we silence other warnings:
 # change-dir-deprecated:
@@ -86,10 +113,14 @@ MenhirLib/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition -w -deprecated-sin
 #    warning introduced in 8.20, no alternative before 8.20
 # deprecated-from-Coq:
 #    see above
+# unknown-option:
+#    the "Set Extraction Prefix" command was introduced in 9.4
+
 COQEXTRACTOPTS ?= \
   -w -change-dir-deprecated \
   -w -extraction-default-directory \
-  -w -deprecated-from-Coq
+  -w -deprecated-from-Coq  \
+  -w -unknown-option
 
 ifneq ($(INSTALL_COQDEV),true)
 # Disable costly generation of .cmx files, which are not used locally
@@ -113,11 +144,16 @@ ifneq (,$(PROFILING))
 endif
 PROFILE_ZIP ?= true
 
-COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
-COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
-COQDOC="$(COQBIN)coqdoc"
-COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) $(COQEXTRACTOPTS) -batch -load-vernac-source
-COQCHK="$(COQBIN)coqchk" $(COQINCLUDES)
+ifeq ($(USE_ROCQ),true)
+COQCOMMAND="$(COQBIN)rocq" $(2)
+else
+COQCOMMAND="$(COQBIN)$(1)"
+endif
+
+COQC=$(call COQCOMMAND,coqc,compile) -q $(COQINCLUDES) $(COQCOPTS)
+COQDEP=$(call COQCOMMAND,coqdep,dep) $(COQINCLUDES)
+COQEXEC=$(call COQCOMMAND,coqtop,repl) $(COQINCLUDES) $(COQEXTRACTOPTS) -batch -load-vernac-source
+COQCHK=$(call COQCOMMAND,coqchk,check) $(COQINCLUDES)
 COQ2HTML=coq2html
 MENHIR=menhir
 CP=cp
@@ -245,13 +281,19 @@ ifeq ($(INSTALL_COQDEV),true)
 	$(MAKE) compcert.config
 endif
 
+light:
+	@test -f .depend || $(MAKE) depend
+	$(MAKE) proof
+	$(MAKE) extraction
+	$(MAKE) ccomp
+
 proof: $(FILES:.v=.vo)
 
 extraction: extraction/STAMP
 
 extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v $(ARCH)/extractionMachdep.v
 	rm -f extraction/*.ml extraction/*.mli
-	$(COQEXEC) extraction/extraction.v
+	$(COQEXEC) ./extraction/extraction.v
 	@if grep 'AXIOM TO BE REALIZED' extraction/*.ml; then \
             echo "An error occured during extraction to OCaml code."; \
             echo "Check the versions of Flocq and MenhirLib used."; \
@@ -305,7 +347,7 @@ latexdoc:
 
 %.vo: %.v
 	@rm -f doc/$(*F).glob
-	@echo "COQC $*.v"
+	@echo "CROCQ $*.v"
 	@$(COQC) $*.v
 	@$(PROFILE_ZIP)
 
@@ -406,6 +448,7 @@ clean:
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
 	rm -f $(GENERATED) .depend
 	rm -f .lia.cache
+	rm -rf build
 	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
 
@@ -429,6 +472,28 @@ print-includes:
 
 CoqProject:
 	@echo $(COQINCLUDES) > _CoqProject
+
+ALL_ARCHES=aarch64 arm ppc rv64 x86_32 x86_64
+ALL_BUILDS=$(patsubst %, build/%, $(ALL_ARCHES))
+
+setup-build: FORCE
+	rm -rf build
+	@if [ ! -d .git ]; then echo "build-setup is only available for git checkouts"; exit 2; fi
+	@for a in $(ALL_ARCHES); do \
+           echo "Setting up build/$$a"; \
+           tools/linkhier build/$$a; \
+           (cd build/$$a && ./configure $$a-linux); \
+         done
+
+$(ALL_BUILDS): FORCE
+	@if [ ! -d $@ ]; then echo "$@ is missing, please run 'make setup-build'"; exit 2; fi
+	@echo "$@ started"; \
+         if output=$$($(MAKE) -C $@ light 2>&1); \
+         then echo "$@ succeeded" ; \
+         else echo "$$output"; echo "$@ FAILED"; exit 2; \
+         fi
+
+build-all: $(ALL_BUILDS)
 
 -include .depend
 

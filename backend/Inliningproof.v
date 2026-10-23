@@ -36,23 +36,23 @@ Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_match TRANSF).
+Proof. exact (Genv.find_symbol_match TRANSF). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_match TRANSF).
+Proof. exact (Genv.senv_match TRANSF). Qed.
 
 Lemma functions_translated:
   forall (v: val) (f: fundef),
   Genv.find_funct ge v = Some f ->
   exists cu f', Genv.find_funct tge v = Some f' /\ transf_fundef (funenv_program cu) f = OK f' /\ linkorder cu prog.
-Proof (Genv.find_funct_match TRANSF).
+Proof. exact (Genv.find_funct_match TRANSF). Qed.
 
 Lemma function_ptr_translated:
   forall (b: block) (f: fundef),
   Genv.find_funct_ptr ge b = Some f ->
   exists cu f', Genv.find_funct_ptr tge b = Some f' /\ transf_fundef (funenv_program cu) f = OK f' /\ linkorder cu prog.
-Proof (Genv.find_funct_ptr_match TRANSF).
+Proof. exact (Genv.find_funct_ptr_match TRANSF). Qed.
 
 Lemma sig_function_translated:
   forall cu f f', transf_fundef (funenv_program cu) f = OK f' -> funsig f' = funsig f.
@@ -683,13 +683,13 @@ Qed.
 (** Preservation by a memory store *)
 
 Lemma match_stacks_inside_store:
-  forall F m m' stk stk' f' ctx sp' rs' chunk b ofs v m1 chunk' b' ofs' v' m1',
+  forall F m m' stk stk' f' ctx sp' rs' chunk addr v m1 chunk' addr' v' m1',
   match_stacks_inside F m m' stk stk' f' ctx sp' rs' ->
-  Mem.store chunk m b ofs v = Some m1 ->
-  Mem.store chunk' m' b' ofs' v' = Some m1' ->
+  Mem.storev chunk m addr v = Some m1 ->
+  Mem.storev chunk' m' addr' v' = Some m1' ->
   match_stacks_inside F m1 m1' stk stk' f' ctx sp' rs'.
 Proof.
-  intros.
+  intros. destruct addr; try discriminate. destruct addr'; try discriminate.
   eapply match_stacks_inside_invariant; eauto with mem.
 Qed.
 
@@ -746,30 +746,6 @@ Proof.
   intros. eapply match_stacks_invariant; eauto.
   intros. eapply Mem.perm_free_1; eauto with ordered_type.
   intros. eapply Mem.perm_free_3; eauto.
-Qed.
-
-Lemma min_alignment_sound:
-  forall sz n, (min_alignment sz | n) -> Mem.inj_offset_aligned n sz.
-Proof.
-  intros; red; intros. unfold min_alignment in H.
-  assert (2 <= sz -> (2 | n)). intros.
-    destruct (zle sz 1). extlia.
-    destruct (zle sz 2). auto.
-    destruct (zle sz 4). apply Z.divide_trans with 4; auto. exists 2; auto.
-    apply Z.divide_trans with 8; auto. exists 4; auto.
-  assert (4 <= sz -> (4 | n)). intros.
-    destruct (zle sz 1). extlia.
-    destruct (zle sz 2). extlia.
-    destruct (zle sz 4). auto.
-    apply Z.divide_trans with 8; auto. exists 2; auto.
-  assert (8 <= sz -> (8 | n)). intros.
-    destruct (zle sz 1). extlia.
-    destruct (zle sz 2). extlia.
-    destruct (zle sz 4). extlia.
-    auto.
-  destruct chunk; simpl in *; auto using Z.divide_1_l.
-  apply H2; lia.
-  apply H2; lia.
 Qed.
 
 (** Preservation by external calls *)
@@ -843,9 +819,9 @@ Proof.
   intros. inv H.
   (* base *)
   eapply match_stacks_inside_base; eauto. congruence.
-  rewrite H1. rewrite DSTK. apply align_unchanged. apply min_alignment_pos. apply Z.divide_0_r.
+  rewrite H1. rewrite DSTK. apply align_unchanged. apply min_safe_alignment_pos. apply Z.divide_0_r.
   (* inlined *)
-  assert (dstk ctx <= dstk ctx'). rewrite H1. apply align_le. apply min_alignment_pos.
+  assert (dstk ctx <= dstk ctx'). rewrite H1. apply align_le. apply min_safe_alignment_pos.
   eapply match_stacks_inside_inlined; eauto.
   red; intros. destruct (zlt ofs (dstk ctx)). apply PAD; lia. apply H3. inv H4. extlia.
   congruence.
@@ -988,15 +964,13 @@ Proof.
     rewrite <- P. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
   eapply plus_one. eapply exec_Istore; eauto.
-  destruct a; simpl in H1; try discriminate.
-  destruct a'; simpl in U; try discriminate.
+  destruct a; try discriminate. 
+  destruct a'; try discriminate.
   econstructor; eauto.
   eapply match_stacks_inside_store; eauto.
-  eapply Mem.store_valid_block_1; eauto.
-  eapply range_private_invariant; eauto.
-  intros; split; auto. eapply Mem.perm_store_2; eauto.
-  intros; eapply Mem.perm_store_1; eauto.
-  intros. eapply SSZ2. eapply Mem.perm_store_2; eauto.
+  eapply Mem.store_valid_block_1; eauto with mem.
+  eapply range_private_invariant; eauto with mem.
+  intros. eapply SSZ2. eapply Mem.perm_store_2; eauto with mem.
 
 - (* call *)
   exploit match_stacks_inside_globalenvs; eauto. intros [bound G].
@@ -1071,7 +1045,7 @@ Proof.
   apply agree_val_regs_gen; auto.
   eapply Mem.free_left_inject; eauto.
   red; intros; apply PRIV'.
-    assert (dstk ctx <= dstk ctx'). red in H14; rewrite H14. apply align_le. apply min_alignment_pos.
+    assert (dstk ctx <= dstk ctx'). red in H14; rewrite H14. apply align_le. apply min_safe_alignment_pos.
     lia.
 
 - (* builtin *)
@@ -1203,6 +1177,8 @@ Proof.
     instantiate (1 := sp'). auto.
     (* offset is representable *)
     instantiate (1 := dstk ctx). generalize (Z.le_max_r (fn_stacksize f) 0). lia.
+    (* negative offsets are not revealed *)
+    right; lia.
     (* size of target block is representable *)
     intros. right. exploit SSZ2; eauto with mem. inv FB; lia.
     (* we have full permissions on sp' at and above dstk ctx *)
@@ -1210,7 +1186,7 @@ Proof.
     eapply range_private_perms; eauto. extlia.
     (* offset is aligned *)
     replace (fn_stacksize f - 0) with (fn_stacksize f) by lia.
-    inv FB. apply min_alignment_sound; auto.
+    inv FB. assumption.
     (* nobody maps to (sp, dstk ctx...) *)
     intros. exploit (PRIV (ofs + delta')); eauto. extlia.
     intros [A B]. eelim B; eauto.

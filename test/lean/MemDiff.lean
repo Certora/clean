@@ -1,5 +1,5 @@
 /-
-  Differential test SUBJECT for CCLib/Memory.lean.
+  Differential test SUBJECT for CCLib/common/Memory.lean.
 
   Kept in lockstep with `mem_oracle.ml`, which runs the same scenarios against
   CompCert's extracted memory model.  (CompCert's `Mem.store`/`load`/`free`

@@ -1,4 +1,4 @@
-(* Differential test ORACLE for CCLib/Memory.lean.
+(* Differential test ORACLE for CCLib/common/Memory.lean.
 
    Why OCaml and not Coq: CompCert's `Mem.store`/`load`/`free` cannot be
    evaluated by Coq's `Compute`.  They branch on `valid_access_dec`, which goes

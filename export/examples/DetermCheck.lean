@@ -1,5 +1,5 @@
 /-
-  Non-vacuity checks for `CCLib.Determinism`.
+  Non-vacuity checks for `CCLib.common.Determinism`.
 
   A determinism theorem is trivially satisfiable by an empty relation, so
   stating it proves nothing.  Every check below therefore *applies* determinism
@@ -60,7 +60,7 @@ example (s' : State)
   (sstep_determ hfe hinj h
     (Step.set _ _ _ _ _ _ _ _ (EvalExpr.Econst_int _ _)))
 
-/-- `Sifthenelse`: the *branch* is forced.  `CCLib.Hoare`'s `triple_if` takes
+/-- `Sifthenelse`: the *branch* is forced.  `CCLib.logic.Hoare`'s `triple_if` takes
     the branch from the caller "to avoid needing determinism of `EvalExpr`"
     (`Hoare.lean:270`); this is the fact that was missing. -/
 example (s' : State)
@@ -147,7 +147,7 @@ example : (Genv.toSenv prog.globalenv.genv_genv).SymbolsInjective :=
   program_symbolsInjective prog
 
 /-- And the interpreter agrees with the relation wherever it steps — the
-    completeness direction `CCLib.ClightExecSound` left open. -/
+    completeness direction `CCLib.cfrontend.ClightExecSound` left open. -/
 example (s s' s2 : State)
     (hi : doStep prog.globalenv s = some (E0, s'))
     (hr : Step prog.globalenv (FunctionEntry2 prog.globalenv) s E0 s2) : s' = s2 :=
@@ -176,7 +176,7 @@ section AxiomGuard
 open Lean
 
 /-- Lean's own three, plus the two uninterpreted-external `Parameter`s that
-    `CCLib.Events` has always had. -/
+    `CCLib.common.Events` has always had. -/
 private def oldAxioms : List Name :=
   [``propext, ``Classical.choice, ``Quot.sound,
    ``CC.externalFunctionsSem, ``CC.inlineAssemblySem]

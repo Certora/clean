@@ -966,7 +966,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       | Vint n =>
           match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
-          | Some lbl => goto_label f lbl (rs#X5 <- Vundef #X31 <- Vundef) m
+          | Some lbl => goto_label f lbl (rs#X6 <- Vundef #X31 <- Vundef) m
           end
       | _ => Stuck
       end

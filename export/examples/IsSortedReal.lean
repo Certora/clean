@@ -8,7 +8,7 @@
 
   `is_sorted` (from `main.c`, exported by `clightgen -lean` into `GenMain`)
   returns `1` whenever its input array is sorted — proved against CompCert's
-  *real* Clight semantics via the Hoare logic in `CCLib.Hoare`.
+  *real* Clight semantics via the Hoare logic in `CCLib.logic.Hoare`.
 
   This replaces `IsSortedProof.lean`, which proved the same statement against the
   hand-written toy interpreter in `ClightSem.lean`.  The difference is the whole
@@ -83,7 +83,7 @@ theorem body_eq : f_is_sorted.fn_body = fullBody := rfl
 Taken as a hypothesis so every theorem below is independent of the generated
 program.  Discharged once, in `idents_distinct`, by **kernel `decide`** — this
 needed `native_decide` until `identOfString` was made kernel-reducible (see
-`CCLib.Positive`). -/
+`CCLib.lib.Positive`). -/
 
 /-- The identifiers `is_sorted` writes, each distinct from the ones still live at
     that point.  Field `x_y` reads "writing `x` does not disturb `y`". -/
@@ -424,7 +424,7 @@ end
 
 One `decide`, for "these seven identifiers are pairwise distinct".  This used to
 require `native_decide` (and therefore an extra axiom in every downstream
-theorem); making `identOfString` fold over `String.toList` in `CCLib.Positive`
+theorem); making `identOfString` fold over `String.toList` in `CCLib.lib.Positive`
 put it back in the kernel's reach.  The values are checkable independently:
 `#eval (_numbers, _len, _i, _t'1, _t'2, _last, _first)`. -/
 theorem idents_distinct : Distinct := by

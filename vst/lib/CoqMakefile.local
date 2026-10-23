@@ -1,0 +1,45 @@
+SRC=src
+INCLUDE=include
+CFLAGS=-I$(INCLUDE)
+CC=gcc
+
+proof/math_extern.v: $(SRC)/math_extern.c
+	clightgen -flongdouble -normalize $< -o $@ 
+
+proof/malloc_extern.v: $(SRC)/malloc_extern.c
+	clightgen -normalize $< -o $@ 
+
+proof/SC_atomics_extern.v: $(SRC)/SC_atomics_extern.c
+	clightgen -I$(INCLUDE) -normalize $< -o $@
+
+proof/threads.v: $(SRC)/threads.c
+	clightgen -I$(INCLUDE) -normalize $< -o $@
+
+proof/locks.v: $(SRC)/locks.c
+	clightgen -I$(INCLUDE) -normalize $< -o $@
+
+test/proof/incr.v: test/src/incr.c
+	clightgen -I$(INCLUDE) -normalize $< -o $@
+test/proof/incr_main.v: test/src/incr_main.c
+	clightgen -I$(INCLUDE) -normalize $< -o $@
+test/proof/testmath.v: test/src/testmath.c
+	clightgen -I$(INCLUDE) -normalize $< -o $@
+
+tests: test/incr
+
+test/incr: test/src/incr_main.o test/src/incr.o $(SRC)/threads.o $(SRC)/locks.o $(SRC)/SC_atomics.o
+	   $(CC) $(CFLAGS) $^ -o $@
+
+$(SRC)/threads.o: $(SRC)/threads.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@ 
+$(SRC)/locks.o: $(SRC)/locks.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@ 
+$(SRC)/SC_atomics.o: $(SRC)/SC_atomics.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@ 
+test/src/incr.o: test/src/incr.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@ 
+test/src/incr_main.o: test/src/incr_main.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@ 
+
+
+

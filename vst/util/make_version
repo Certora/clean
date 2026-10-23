@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#usage:  util/make_version Bitsize Compcert-version
+F=veric/version.v
+if command -v gdate >/dev/null; then
+    DATE=gdate
+else
+    DATE=date
+fi
+set -e
+printf >$F 'From Stdlib Require Import ZArith Strings.String. Open Scope string.\n'
+printf >>$F 'Definition git_rev := "'
+if command -v git >/dev/null && [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" = "true" ]; then
+  git log -n 1 --pretty=format:"%H" >>$F || true
+fi
+printf >>$F '".\n'
+printf >>$F 'Definition release := "'
+tr -d '[:cntrl:]' <VERSION >>$F
+printf >>$F '".\n'
+printf >>$F 'Definition date := "'
+$DATE --rfc-3339=date | tr -d '[:cntrl:]' >>$F
+printf >>$F '".\n'
+printf >>$F 'Definition bitsize : Z := %d.\n' $1
+printf >>$F 'Definition compcert_version := "%s".' $2
+

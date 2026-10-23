@@ -70,12 +70,12 @@ generated files (it is not compiled by the CompCert Rocq build).
 
 ### Typechecking generated files
 
-A minimal Lake project is provided (`lakefile.toml`, `lean-toolchain`).
+The Lake project is the one at the repository root (`lakefile.toml`,
+`lean-toolchain`), which uses `export/` as its source directory.
 `Demo.lean` is a representative generated file exercising every construct.
 
 ```
-   cd export
-   lake build            # typechecks Clightdefs.lean and Demo.lean
+   lake build            # from the repository root; typechecks Clightdefs.lean and Demo.lean
 ```
 
 To typecheck one generated file `foo.lean` without Lake, place it next to
@@ -110,9 +110,9 @@ theorem about a real C function — is documented separately:
 
 **→ [`LEAN.md`](LEAN.md)**
 
-In short: `CCLib/` holds ~6.5k lines of Lean (no `sorry`) mirroring the Rocq
+In short: `CCLib/` holds ~15k lines of Lean (no `sorry`) mirroring the Rocq
 semantic stack, validated by 71,222 operation-level differential observations
-against CompCert's own Rocq code and by 526 whole-program comparisons against
-`ccomp -interp`; `CCLib/Hoare.lean` adds a Hoare logic whose soundness is
+against CompCert's own Rocq code and by 516 whole-program comparisons against
+`ccomp -interp`; `CCLib/logic/Hoare.lean` adds a Hoare logic whose soundness is
 definitional; and `IsSortedReal.lean` uses it to prove that `is_sorted` from
 `main.c` returns `true` on sorted input, under `CC.Step`.

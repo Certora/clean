@@ -8,7 +8,7 @@
 # Requirements:
 #   - CompCert's Rocq development built (make proof), with coqc on PATH:
 #       eval $(opam env --switch=compcert-4.14)
-#   - lean on PATH (see export/lean-toolchain)
+#   - lean on PATH (see lean-toolchain at the repository root)
 #
 # Exit status 0 iff every case agrees.
 
@@ -34,10 +34,10 @@ coqc $INC "$here/int_diff.v" > "$tmp/coq.raw" 2>"$tmp/coq.err" || {
   echo "coqc failed:"; head -20 "$tmp/coq.err"; exit 1; }
 grep -E '^ *= ' "$tmp/coq.raw" | sed -E 's/^ *= //; s/[[:space:]]*$//' > "$tmp/coq.vals"
 
-echo "[3/4] Running the Lean subject (CCLib/Integers.lean) ..."
+echo "[3/4] Running the Lean subject (CCLib/lib/Integers.lean) ..."
 cp "$here/IntDiff.lean" "$exp/IntDiff.lean"
-( cd "$exp" && LEAN_PATH=. lean -o CCLib/Archi.olean CCLib/Archi.lean \
-  && LEAN_PATH=. lean -o CCLib/Integers.olean CCLib/Integers.lean \
+( cd "$exp" && LEAN_PATH=. lean -o CCLib/aarch64/Archi.olean CCLib/aarch64/Archi.lean \
+  && LEAN_PATH=. lean -o CCLib/lib/Integers.olean CCLib/lib/Integers.lean \
   && LEAN_PATH=. lean IntDiff.lean ) > "$tmp/lean.vals"
 rm -f "$exp/IntDiff.lean"
 

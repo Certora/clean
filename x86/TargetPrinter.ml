@@ -752,7 +752,9 @@ module Target(System: SYSTEM):TARGET =
             let (tmp1, tmp2) =
               if r = RAX then (RDX, RAX) else (RAX, RDX) in
             fprintf oc "	leaq	%a(%%rip), %a\n" label l ireg tmp1;
-            fprintf oc "	movslq	(%a, %a, 4), %a\n" ireg tmp1 ireg r ireg tmp2;
+            (* Normalize r to 32-bit unsigned *)
+            fprintf oc "	movl	%a, %a\n" ireg32 r ireg32 tmp2;
+            fprintf oc "	movslq	(%a, %a, 4), %a\n" ireg tmp1 ireg tmp2 ireg tmp2;
             fprintf oc "	addq	%a, %a\n" ireg tmp2 ireg tmp1;
             fprintf oc "	jmp	*%a\n" ireg tmp1
           end else begin
@@ -864,7 +866,7 @@ module Target(System: SYSTEM):TARGET =
             | EF_annot(kind,txt, targs) ->
                 begin match (P.to_int kind) with
                   | 1 ->  let annot = annot_text preg_annot "esp" txt args in
-                    fprintf oc "%s annotation: %S\n" comment annot
+                    fprintf oc "%s annotation: %s\n" comment (quote_string annot)
                   | 2 -> let lbl = new_label () in
                     fprintf oc "%a:\n" label lbl;
                     let sp = if Archi.ptr64 then "rsp" else "esp" in

@@ -1,6 +1,6 @@
 /-
   Non-vacuity checks for the Phase-7.1 memory lemma library
-  (`CCLib/MemoryLemmas.lean`).
+  (`CCLib/common/MemoryLemmas.lean`).
 
   Every lemma there is proved, so it is *true*.  That is not the same as being
   *useful*: if `store` never succeeded, `load_store_same` would hold vacuously and
@@ -141,7 +141,7 @@ theorem hf_agrees_m2 : Heap.Agrees hf m2 :=
     (fun i hi => by
       have hne : ¬ (b0 = b0 ∧ (0:Z) ≤ 4 + (i : Z) ∧ 4 + (i : Z) < 4) := by
         intro hc
-        exact not_off_lo (i : Z) hc.2.2 (Int.ofNat_zero_le i)
+        exact not_off_lo (i : Z) hc.2.2 (Int.natCast_nonneg i)
       show (if b0 = b0 ∧ (0:Z) ≤ 4 + (i:Z) ∧ 4 + (i:Z) < 4 then _ else none) = none
       rw [if_neg hne])
 

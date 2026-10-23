@@ -31,12 +31,14 @@ theorem selfRecursive_ok (ge : CGenv) (fe : EntryRel) (b : Block) (fn : Function
   intro b' S' fd' h1 h2
   by_cases hb : b' = b
   · subst hb
+    try dsimp only at h1  -- older cores leave the spec-table lambda unreduced
     rw [if_pos rfl] at h1
     injection h1 with h1; subst h1
     rw [hfind] at h2
     injection h2 with h2; subst h2
     exact ⟨fn, rfl, hbody⟩
-  · rw [if_neg hb] at h1; exact absurd h1 (by simp)
+  · try dsimp only at h1
+    rw [if_neg hb] at h1; exact absurd h1 (by simp)
 
 /-- The two-function spec table used below. -/
 def table (b1 b2 : Block) (S1 S2 : FunSpec) : SpecTable :=

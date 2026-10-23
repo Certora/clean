@@ -21,7 +21,7 @@
 #       eval $(opam env --switch=compcert-4.14)
 #       ./configure -clightgen aarch64-macos && make proof && make extraction
 #       make clightgen          # also produces the .cmx files level 3 links against
-#   - lean on PATH (see export/lean-toolchain)
+#   - lean on PATH (see lean-toolchain at the repository root)
 #
 # Exit status 0 iff every level agrees.
 

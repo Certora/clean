@@ -1,6 +1,6 @@
 /-
   Usability check for the Phase-9 Step-10 temporary-state layer
-  (`CCLib.Temps`).
+  (`CCLib.logic.Temps`).
 
   The claim being tested is the *asymptotic* one: a statement's proof obligation is
   **O(1) in the number of tracked temporaries** instead of O(N).  So the check is
@@ -9,7 +9,7 @@
   per-temporary, this file would grow with the list; it does not.
 
   It also pins the thing that made it possible: `temps_ne` is kernel `decide`,
-  which works only because `identOfString` reduces (see `CCLib.Positive`).  If
+  which works only because `identOfString` reduces (see `CCLib.lib.Positive`).  If
   that regresses, this file fails rather than silently falling back.
 
   The second half of the file covers `localst_fwd`, which extends the same claim
@@ -51,7 +51,7 @@ def _t'17 : Ident := (Positive.ofNat 144)
     point.
 
     `abbrev`, not `def`: the tactics work on the list's *structure*, so a named
-    tracked list has to be reducible (noted in `CCLib.Temps`). -/
+    tracked list has to be reducible (noted in `CCLib.logic.Temps`). -/
 abbrev wide (b : Block) (ofs0 : Integers.Ptrofs) : List (Ident × Val) :=
   [(_buf, .Vptr b ofs0), (_len, .Vlong 0), (_n, .Vint 0),
    (_t'1, .Vlong 0), (_t'2, .Vptr b ofs0), (_t'3, .Vint 0), (_t'4, .Vlong 0),
@@ -103,7 +103,7 @@ What it did *not* do was make a **chain** of steps cheap: `triple_seq_fwd` takes
 its mid-condition explicitly, so an N-assignment chain cost N tracked lists
 written out by hand.
 
-`localst_fwd` (`CCLib.Temps`) closes it: `setLocal` computes the post-state, so
+`localst_fwd` (`CCLib.logic.Temps`) closes it: `setLocal` computes the post-state, so
 `triple_set_local`'s `hsub`/`hne` become theorems and a chain leaves exactly one
 goal per assignment — its `EvalExpr` obligation, the only part that is not
 bookkeeping.  It cut `work_step` from 117 lines to 57.

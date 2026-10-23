@@ -1,6 +1,6 @@
 # C → Lean 4: Clight semantics and a separation logic, in Lean
 
-This document describes the Lean 4 backend added to CompCert 3.17. It covers
+This document describes the Lean 4 backend added to CompCert 3.18. It covers
 what exists, what it guarantees, and how to use it. The work has four parts:
 
 1. a `-lean` flag for `clightgen`, which exports a C program's Clight abstract
@@ -13,8 +13,17 @@ what exists, what it guarantees, and how to use it. The work has four parts:
    and rules for calls, function pointers, `goto`, structs, arrays and unions,
    used to prove real C functions correct and memory-safe.
 
-The development has no external dependencies (no Mathlib) and contains no
-`sorry` and no `native_decide`.
+The development (the `CCLib` root) has no external dependencies (no Mathlib)
+and contains no `sorry` and no `native_decide`. (It is built by the repository-root
+`lakefile.toml`, with `export/` as source directory, on the toolchain
+`leanprover/lean4:v4.32.1` pinned in the root `lean-toolchain`. The root project additionally requires
+Mathlib for the second root `CCLibMathlib`, which contains the proofs that
+the port's duplicates of Mathlib/Batteries/core definitions agree with them
+(see `../MATHLIB_DUPLICATION.md`); `CCLib` itself does not import Mathlib.
+The floating-point semantics is computed by the exact IEEE-754 model
+`CCLib/lib/FloatModel.lean` (a backport of Lean core's `Float.Model`), so the
+port contains no Flocq; see `../MODULE_AUDIT.md` for which modules the port
+should and should not contain.)
 
 ---
 
@@ -25,12 +34,13 @@ The development has no external dependencies (no Mathlib) and contains no
 | Exporter | `ExportLean{Base,Ctypes,Clight}.ml`, `ExportDriver.ml` | `clightgen -lean` |
 | AST | `Clightdefs.lean`, `CCLib/{AST,Ctypes,Clight}.lean` | the Clight syntax generated files refer to |
 | Semantics | `CCLib/` (Integers, Floats, Values, Memdata, Memory, Cop, Globalenvs, Events, Clight) | port of the Rocq semantic stack |
-| Interpreter | `CCLib/ClightExec.lean`, `CCLib/ClightExecSound.lean` | executable `doStep`, proved sound |
-| Determinism | `CCLib/Determinism.lean` | the step relation is deterministic |
+| Interpreter | `CCLib/cfrontend/ClightExec.lean`, `CCLib/cfrontend/ClightExecSound.lean` | executable `doStep`, proved sound |
+| Determinism | `CCLib/common/Determinism.lean` | the step relation is deterministic |
 | Memory lemmas | `CCLib/{Maps,Memdata,Memory}Lemmas.lean` | store/load algebra for the logic |
+| Memory relations | `CCLib/{MemoryUnchanged,MemdataInject,MemoryInject,MemoryExtends,MemoryInjections}.lean` | `unchanged_on`, `mem_inj`, `Mem.extends`, `Mem.inject` and their theorems (port of `Memory.v`) |
 | Separation logic | `CCLib/{Heap,SepLogic,SepHoare,Funspec,FunPtr,Aggregate,Locals,Temps,Tactics}.lean` | assertions, rules, specs, automation |
-| Linking | `CCLib/Linking.lean` | merge several generated modules into one program |
-| Hoare logic (original) | `CCLib/Hoare.lean`, `HoareArray.lean`, `HoareLong.lean` | the pre-separation logic, still supported |
+| Linking | `CCLib/common/Linking.lean` | merge several generated modules into one program |
+| Hoare logic (original) | `CCLib/logic/Hoare.lean`, `HoareArray.lean`, `HoareLong.lean` | the pre-separation logic, still supported |
 | Examples | `examples/` | generated test programs, the proofs about them, and the non-vacuity checks |
 | Validation | `test/lean/` | differential tests against CompCert |
 
@@ -79,9 +89,18 @@ cases coincide with CompCert's definitions, and this is checked by the
 differential tests in §8.
 
 **Floats are IEEE bit patterns.** A `Float` or `Float32` is its bit pattern,
-so equality is structural and NaN payloads are preserved; arithmetic is
-delegated to the host's IEEE-754 implementation rather than to a port of
-Flocq. This is the one place where the semantics trusts rather than proves.
+so equality is structural and NaN payloads are preserved. Every operation is
+computed exactly in pure Lean: the numeric part comes from `CCLib.lib.FloatModel`,
+a backport of Lean core's IEEE-754 reference model `Float.Model` (core ships it
+from v4.33.0; the pinned v4.32.1 does not have it), and NaN results follow
+CompCert's `binop_nan`/`unop_nan`/`fma_nan` rules with the target's `Archi`
+settings. The float↔integer conversions use the same model (`unpack` for
+Flocq's `ZofB_range`, `normalize` + `pack` for `BofZ`). Everything is written
+once, generically in the format, in `Floats.Gen`; `Float`/`Float32` only
+instantiate it. Lean's built-in `Float`/`Float32` are not used by any
+operation: their arithmetic is opaque to the kernel and its NaN payloads are
+the host's. Everything reduces in the kernel; see
+`examples/FloatConvCheck.lean` for `decide`-checked cases.
 
 **Proof-carrying structures stay proof-carrying.** `Mem.mem` keeps CompCert's
 three memory invariants. Lean's definitional proof irrelevance means
@@ -104,7 +123,7 @@ as a theorem about `globalenv`); and `Program` stores a computed
 ## 4. The interpreter
 
 CompCert has no executable Clight semantics (its reference interpreter runs
-CompCert C, one level up). `CCLib/ClightExec.lean` provides one:
+CompCert C, one level up). `CCLib/cfrontend/ClightExec.lean` provides one:
 
 ```lean
 doStep : CGenv → State → Option (Trace × State)
@@ -129,7 +148,7 @@ interpreter does not execute.
 
 ## 5. Determinism
 
-`CCLib/Determinism.lean` is the analogue of CompCert's
+`CCLib/common/Determinism.lean` is the analogue of CompCert's
 `Clight.semantics_determinate`:
 
 ```lean
@@ -174,7 +193,7 @@ can finish: fall through, `break`, `continue`, `return`, plus a fifth for
 
 ### 6.2 Assertions
 
-`CCLib/Heap.lean` and `CCLib/SepLogic.lean` define heap fragments and the
+`CCLib/logic/Heap.lean` and `CCLib/logic/SepLogic.lean` define heap fragments and the
 assertion language:
 
 - `emp`, pure facts `⌜φ⌝`, separating conjunction `∗`, existentials, with the
@@ -198,7 +217,7 @@ buffer to a callee and gets it back in the postcondition.
 
 ### 6.3 Rules
 
-`CCLib/SepHoare.lean` proves one rule per statement form plus the structural
+`CCLib/logic/SepHoare.lean` proves one rule per statement form plus the structural
 rules:
 
 | Group | Rules |
@@ -206,13 +225,20 @@ rules:
 | Structural | `conseq`, `exists`, `frame`, `vacuous`, `fallthrough` |
 | Statements | `skip`, `set`, `assign`, `assign_copy` (struct copy), `seq`, `if` / `if_true` / `if_false`, `switch` / `switch_const`, `loop`, `break`, `continue`, `return` / `return_none`, `label`, `goto` |
 
+`assign` (and the `deref`/`field`/`union` read lemmas) take an extra argument
+`hw : Mem.ChunkNoWrap chunk ofs`: CompCert's `Mem.loadv`/`storev` reject an
+access that would wrap past the end of the address space, and the argument
+says this cannot happen. It defaults to `by exact Or.inl rfl`, which closes it
+automatically for every chunk except `Mfloat64`/`Many64` (8 bytes, only
+4-byte aligned); for those, prove `ofs + 8 ≤ Ptrofs.modulus`.
+
 The loop rule carries a `Nat` measure that must strictly decrease on every
 iteration, so it proves termination together with the invariant. Loop
 invariants and measures are supplied by hand, as in VST.
 
 ### 6.4 Function specifications and calls
 
-`CCLib/Funspec.lean` defines `FunSpec` (argument types, heap-only pre- and
+`CCLib/logic/Funspec.lean` defines `FunSpec` (argument types, heap-only pre- and
 postcondition, and a well-founded measure on the arguments) and the call rule
 `triple_call`. A callee's specification is heap-only, so it cannot refer to the
 caller's local state; the frame rule carries everything the caller does not
@@ -225,7 +251,7 @@ all of whose bodies are verified under that discipline is met by every
 function in the table. Because the measure is global, mutual recursion is
 covered.
 
-Function entry and exit are covered end to end (`CCLib/Locals.lean`): entering
+Function entry and exit are covered end to end (`CCLib/logic/Locals.lean`): entering
 a function with address-taken locals yields ownership of their fresh,
 all-undefined footprint; individual fields are carved out of it as writable
 `mapsto`s; and returning frees the block, with ownership being what makes the
@@ -233,7 +259,7 @@ free succeed. `satisfies_internal_noVars` (no address-taken locals) and
 `satisfies_internal` (with them) turn a body triple into a `FunSpec` being
 satisfied.
 
-`CCLib/FunPtr.lean` covers calls through function pointers in the three
+`CCLib/logic/FunPtr.lean` covers calls through function pointers in the three
 shapes `clightgen -normalize` emits: a global name, a pointer held in a
 temporary, and `(*p)(…)` through a dereference. Function code is not a
 resource, so an indirect call composes with the frame rule with no extra
@@ -249,7 +275,7 @@ carries a `Nat` measure that must decrease before the label is re-entered.
 
 ### 6.5 Local state and automation
 
-`CCLib/Temps.lean` represents the temporaries a proof tracks as a list, so
+`CCLib/logic/Temps.lean` represents the temporaries a proof tracks as a list, so
 stepping over an assignment re-establishes the whole list with one lemma
 whose side condition (distinctness of identifiers) is discharged by `decide`.
 The cost of a statement is constant in the number of tracked temporaries.
@@ -257,7 +283,7 @@ Identifiers are kernel-reducible, which
 is what makes `decide` sufficient here and for every composite-environment
 fact.
 
-`CCLib/Tactics.lean` provides `sep_cancel` (entailment between `∗`-chains, by
+`CCLib/logic/Tactics.lean` provides `sep_cancel` (entailment between `∗`-chains, by
 normalising both sides to a canonical order) and forward-shaped rules
 (`triple_set_fwd`, `setLocal`) that compute a statement's postcondition from
 its precondition, so a straight-line block is proved by chaining `refine`s
@@ -266,7 +292,7 @@ inference and no automatic invariant discovery.
 
 ### 6.6 Linking
 
-`clightgen` emits one module per translation unit. `CCLib/Linking.lean` merges
+`clightgen` emits one module per translation unit. `CCLib/common/Linking.lean` merges
 several generated `Program`s into one, following CompCert's `link_fundef` /
 `link_def`: an `extern` declaration resolves against a definition in another
 unit, matching externals merge, duplicate definitions are a conflict, and the
@@ -276,7 +302,7 @@ applies to a multi-file program.
 
 ### 6.7 The original Hoare logic
 
-`CCLib/Hoare.lean`, with `HoareArray.lean` and `HoareLong.lean`, is the
+`CCLib/logic/Hoare.lean`, with `HoareArray.lean` and `HoareLong.lean`, is the
 non-separating logic that preceded the above. It has the same triple shape
 without a frame, fifteen rules, and 32-bit and 64-bit arithmetic bridges.
 
@@ -399,11 +425,12 @@ make -j proof && make extraction && make clightgen
 make ccomp                                  # oracle for diff_exec.sh
 ```
 
-**Build the Lean side** (Lean 4.32.1, pinned in `export/lean-toolchain`).
-Run `lake` from `export/`, not from the repository root:
+**Build the Lean side** (Lean 4.32.1, pinned in the repository-root
+`lean-toolchain`). The only Lake project is the one at the repository root
+(`lakefile.toml`, with `export/` as source directory); run `lake` from there:
 
 ```
-cd export && lake build
+lake build
 ```
 
 **Run the validation suites** (with the opam switch active):

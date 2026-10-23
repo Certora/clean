@@ -6,7 +6,7 @@
 #
 # Requirements:
 #   - ../../clightgen  (build with: ./configure -clightgen <target>; make clightgen)
-#   - lean 4 on PATH   (see export/lean-toolchain for the pinned version)
+#   - lean 4 on PATH   (see lean-toolchain at the repository root for the pinned version)
 
 set -e
 here=$(cd "$(dirname "$0")" && pwd)

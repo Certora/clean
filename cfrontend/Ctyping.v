@@ -538,6 +538,7 @@ Inductive wt_program : program -> Prop :=
          wt_fundef p.(prog_comp_env) e fd) ->
       wt_program p.
 
+Create HintDb ty.
 Global Hint Constructors wt_val wt_rvalue wt_lvalue wt_stmt wt_lblstmts: ty.
 Global Hint Extern 1 (wt_int _ _ _) => exact I: ty.
 Global Hint Extern 1 (wt_int _ _ _) => reflexivity: ty.
@@ -1693,14 +1694,14 @@ Lemma wt_deref_loc:
 Proof.
   induction 1.
 - (* by value, non volatile *)
-  simpl in H1. exploit Mem.load_result; eauto. intros EQ; rewrite EQ.
+  exploit Mem.load_result; eauto with mem. intros EQ; rewrite EQ.
   apply wt_decode_val; auto.
 - (* by value, volatile *)
   inv H1.
   + (* truly volatile *)
     eapply wt_load_result; eauto.
   + (* not really volatile *)
-    exploit Mem.load_result; eauto. intros EQ; rewrite EQ.
+    exploit Mem.load_result; eauto with mem. intros EQ; rewrite EQ.
     apply wt_decode_val; auto.
 - (* by reference *)
   destruct ty; simpl in H; try discriminate; auto with ty.

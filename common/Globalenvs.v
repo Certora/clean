@@ -37,10 +37,8 @@
 From Coq Require Import Recdef Zwf.
 Require Import Axioms Coqlib Errors Maps AST Linking.
 Require Import Integers Floats Values Memory.
+Require Archi.
 
-Declare Scope pair_scope.
-Notation "s #1" := (fst s) (at level 9, format "s '#1'") : pair_scope.
-Notation "s #2" := (snd s) (at level 9, format "s '#2'") : pair_scope.
 Local Open Scope pair_scope.
 Local Open Scope error_monad_scope.
 
@@ -1460,9 +1458,9 @@ Definition init_data_alignment (i: init_data) : Z :=
   | Init_int8 n => 1
   | Init_int16 n => 2
   | Init_int32 n => 4
-  | Init_int64 n => 8
+  | Init_int64 n => Archi.align_int64
   | Init_float32 n => 4
-  | Init_float64 n => 4
+  | Init_float64 n => Archi.align_float64
   | Init_addrof symb ofs => if Archi.ptr64 then 8 else 4
   | Init_space n => 1
   end.
@@ -1491,7 +1489,7 @@ Proof.
   destruct i; simpl in H; eauto.
   simpl. apply Z.divide_1_l.
   destruct (find_symbol ge i); try discriminate. eapply DFL. eassumption.
-  unfold Mptr, init_data_alignment; destruct Archi.ptr64; auto.
+  rewrite align_chunk_Mptr. reflexivity.
 Qed.
 
 Lemma store_init_data_list_aligned:
@@ -1579,8 +1577,8 @@ Proof.
   destruct i; eauto.
   simpl. exists m; auto.
   simpl. exploit H1; eauto. intros (b1 & FS). rewrite FS. eapply DFL.
-  unfold init_data_size, Mptr. destruct Archi.ptr64; auto.
-  unfold init_data_alignment, Mptr. destruct Archi.ptr64; auto.
+  rewrite size_chunk_Mptr; auto.
+  rewrite align_chunk_Mptr; auto.
 Qed.
 
 Lemma store_init_data_list_exists:
@@ -1716,7 +1714,7 @@ Qed.
 Theorem find_def_match_2:
   forall b, option_rel (match_globdef match_fundef match_varinfo ctx)
                        (find_def (globalenv p) b) (find_def (globalenv tp) b).
-Proof (mge_defs globalenvs_match).
+Proof. exact (mge_defs globalenvs_match). Qed.
 
 Theorem find_def_match:
   forall b g,

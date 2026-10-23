@@ -1,0 +1,17 @@
+language: generic
+dist: trusty
+sudo: required
+
+matrix:
+  fast_finish: true
+  include:
+    - env: COQ_VERSION="v8.13"    COQ_PACKAGE="coq" PPA="ppa:jgross-h/coq-8.13-daily"
+
+before_install:
+  - if [ ! -z "$PPA" ]; then sudo add-apt-repository "$PPA" -y; fi
+  - sudo apt-get update -q
+  - sudo apt-get install $COQ_PACKAGE -y
+
+script:
+  - make Makefile.coq
+  - env TIMED=1 make -j2 -f Makefile.coq

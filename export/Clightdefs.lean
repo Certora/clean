@@ -27,7 +27,7 @@ namespace CC
 
     The C type syntax (`Ty`, `Attr`, `Member`, `CompositeDef`, the `tint`/`tptr`
     short names, …) and the operator types (`Unop`, `Binop`) now come from
-    `CCLib.Ctypes` / `CCLib.Cop`, together with their *semantics* (`sizeof`,
+    `CCLib.cfrontend.Ctypes` / `CCLib.cfrontend.Cop`, together with their *semantics* (`sizeof`,
     `fieldOffset`, `accessMode`, `Cop.semBinaryOperation`, …).  Names are
     unchanged, so files emitted by `clightgen -lean` are unaffected. -/
 
@@ -35,7 +35,7 @@ namespace CC
 
     The Clight AST (`Expr`, `Stmt`, `Function`, `FunDef`, `Program`,
     `mkprogram`, `swhile`) and its operational semantics now live in
-    `CCLib.Clight`, imported via `CCLib` above.  Names are unchanged, so files
+    `CCLib.cfrontend.Clight`, imported via `CCLib` above.  Names are unchanged, so files
     emitted by `clightgen -lean` are unaffected. -/
 
 end CC

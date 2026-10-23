@@ -707,7 +707,7 @@ Proof.
   rewrite check_successor_complete by auto. simpl.
   exists (match ef with EF_annot _ _ _ | EF_debug _ _ _ => e3 | _ => e2 end); split.
   rewrite H1 in C, E.
-  destruct ef; try (rewrite <- H0; rewrite A); simpl; auto.
+  destruct ef; auto; rewrite <- H0, A; simpl; auto.
   destruct ef; auto.
 - (* cond *)
   exploit S.set_list_complete. eauto. eauto. intros [e1 [A B]].
@@ -850,8 +850,8 @@ Lemma wt_exec_Iload:
   wt_regset env rs ->
   wt_regset env (rs#dst <- v).
 Proof.
-  intros. destruct a; simpl in H0; try discriminate. inv H.
-  eapply wt_regset_assign; eauto. rewrite H8; eapply Mem.load_type; eauto.
+  intros. destruct a; try discriminate. inv H.
+  eapply wt_regset_assign; eauto. rewrite H8; eapply Mem.load_type; eauto with mem.
 Qed.
 
 Lemma wt_exec_Ibuiltin:
